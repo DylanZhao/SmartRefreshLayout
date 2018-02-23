@@ -8,23 +8,22 @@ package com.scwang.smartrefresh.header;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
-import android.support.annotation.RequiresApi;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.os.Build;
+import android.graphics.drawable.Drawable;
+import android.support.annotation.ColorInt;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.ImageView;
 
 import com.scwang.smartrefresh.header.internal.MaterialProgressDrawable;
 import com.scwang.smartrefresh.header.waterdrop.WaterDropView;
 import com.scwang.smartrefresh.layout.api.RefreshHeader;
-import com.scwang.smartrefresh.layout.api.RefreshKernel;
 import com.scwang.smartrefresh.layout.api.RefreshLayout;
 import com.scwang.smartrefresh.layout.constant.RefreshState;
 import com.scwang.smartrefresh.layout.constant.SpinnerStyle;
+import com.scwang.smartrefresh.layout.internal.InternalAbstract;
 import com.scwang.smartrefresh.layout.internal.ProgressDrawable;
 import com.scwang.smartrefresh.layout.util.DensityUtil;
 
@@ -34,8 +33,12 @@ import static android.view.View.MeasureSpec.getSize;
 import static android.view.View.MeasureSpec.makeMeasureSpec;
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 
-
-public class WaterDropHeader extends ViewGroup implements RefreshHeader {
+/**
+ * WaterDropHeader
+ * Created by SCWANG on 2017/5/31.
+ * from https://github.com/THEONE10211024/WaterDropListView
+ */
+public class WaterDropHeader extends InternalAbstract implements RefreshHeader {
 
     //<editor-fold desc="Field">
     private static final float MAX_PROGRESS_ANGLE = 0.8f;
@@ -45,39 +48,28 @@ public class WaterDropHeader extends ViewGroup implements RefreshHeader {
     private WaterDropView mWaterDropView;
     private ProgressDrawable mProgressDrawable;
     private MaterialProgressDrawable mProgress;
-    private int mProgressDegree = 0;
     //</editor-fold>
 
     //<editor-fold desc="ViewGroup">
     public WaterDropHeader(Context context) {
-        super(context);
-        this.initView(context);
+        this(context, null);
     }
 
     public WaterDropHeader(Context context, AttributeSet attrs) {
-        super(context, attrs);
-        this.initView(context);
+        this(context, attrs, 0);
     }
 
     public WaterDropHeader(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        this.initView(context);
-    }
 
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-    public WaterDropHeader(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
-        super(context, attrs, defStyleAttr, defStyleRes);
-        this.initView(context);
-    }
-
-    private void initView(Context context) {
         DensityUtil density = new DensityUtil();
         mWaterDropView = new WaterDropView(context);
         addView(mWaterDropView, MATCH_PARENT, MATCH_PARENT);
-        mWaterDropView.updateComleteState(0);
+        mWaterDropView.updateCompleteState(0);
 
         mProgressDrawable = new ProgressDrawable();
-        mProgressDrawable.setBounds(0,0, density.dip2px(20), density.dip2px(20));
+        mProgressDrawable.setBounds(0, 0, density.dip2px(20), density.dip2px(20));
+        mProgressDrawable.setCallback(this);
 
         mImageView = new ImageView(context);
         mProgress = new MaterialProgressDrawable(context, mImageView);
@@ -91,7 +83,7 @@ public class WaterDropHeader extends ViewGroup implements RefreshHeader {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-        LayoutParams lpImage = mImageView.getLayoutParams();
+        LayoutParams lpImage = (LayoutParams) mImageView.getLayoutParams();
         mImageView.measure(
                 makeMeasureSpec(lpImage.width, EXACTLY),
                 makeMeasureSpec(lpImage.height, EXACTLY)
@@ -133,34 +125,41 @@ public class WaterDropHeader extends ViewGroup implements RefreshHeader {
         if (mState == RefreshState.Refreshing) {
             canvas.save();
             canvas.translate(
-                    getWidth()/2-mProgressDrawable.width()/2,
-                    getHeight()/2-mProgressDrawable.height()/2
+                    getWidth()/2-mProgressDrawable.getBounds().width()/2,
+                    mWaterDropView.getMaxCircleRadius()
+                            +mWaterDropView.getPaddingTop()
+                            -mProgressDrawable.getBounds().height()/2
             );
-            canvas.rotate(mProgressDegree, mProgressDrawable.width() / 2, mProgressDrawable.height() / 2);
             mProgressDrawable.draw(canvas);
             canvas.restore();
         }
     }
+
+    @Override
+    public void invalidateDrawable(@NonNull Drawable drawable) {
+        if (drawable == mProgressDrawable) {
+            invalidate();
+        } else {
+            super.invalidateDrawable(drawable);
+        }
+    }
+
     //</editor-fold>
 
     //<editor-fold desc="RefreshHeader">
-    @Override
-    public void onInitialized(RefreshKernel layout, int height, int extendHeight) {
-
-    }
 
     @Override
-    public void onPullingDown(float percent, int offset, int headHeight, int extendHeight) {
-        mWaterDropView.updateComleteState((offset), headHeight + extendHeight);
+    public void onPulling(float percent, int offset, int height, int extendHeight) {
+        mWaterDropView.updateCompleteState((offset), height + extendHeight);
         mWaterDropView.postInvalidate();
 
-        float originalDragPercent = 1f * offset / headHeight;
+        float originalDragPercent = 1f * offset / height;
 
         float dragPercent = Math.min(1f, Math.abs(originalDragPercent));
         float adjustedPercent = (float) Math.max(dragPercent - .4, 0) * 5 / 3;
-        float extraOS = Math.abs(offset) - headHeight;
-        float tensionSlingshotPercent = Math.max(0, Math.min(extraOS, (float) headHeight * 2)
-                / (float) headHeight);
+        float extraOS = Math.abs(offset) - height;
+        float tensionSlingshotPercent = Math.max(0, Math.min(extraOS, (float) height * 2)
+                / (float) height);
         float tensionPercent = (float) ((tensionSlingshotPercent / 4) - Math.pow(
                 (tensionSlingshotPercent / 4), 2)) * 2f;
         float strokeStart = adjustedPercent * .8f;
@@ -172,15 +171,15 @@ public class WaterDropHeader extends ViewGroup implements RefreshHeader {
     }
 
     @Override
-    public void onReleasing(float percent, int offset, int headHeight, int extendHeight) {
-        if (mState != RefreshState.Refreshing) {
-            mWaterDropView.updateComleteState(Math.max(offset, 0), headHeight + extendHeight);
+    public void onReleasing(float percent, int offset, int height, int extendHeight) {
+        if (mState != RefreshState.Refreshing && mState != RefreshState.RefreshReleased) {
+            mWaterDropView.updateCompleteState(Math.max(offset, 0), height + extendHeight);
             mWaterDropView.postInvalidate();
         }
     }
 
     @Override
-    public void onStateChanged(RefreshLayout refreshLayout, RefreshState oldState, RefreshState newState) {
+    public void onStateChanged(@NonNull RefreshLayout refreshLayout, @NonNull RefreshState oldState, @NonNull RefreshState newState) {
         mState = newState;
         switch (newState) {
             case None:
@@ -203,49 +202,35 @@ public class WaterDropHeader extends ViewGroup implements RefreshHeader {
     }
 
     @Override
-    public void onStartAnimator(RefreshLayout layout, int headHeight, int extendHeight) {
-        Animator animator = mWaterDropView.createAnimator();
-        animator.addListener(new AnimatorListenerAdapter() {
-            @Override
+    public void onReleased(@NonNull final RefreshLayout layout, int height, int extendHeight) {
+        mProgressDrawable.start();
+        mWaterDropView.createAnimator().start();//开始回弹
+        mWaterDropView.animate().setDuration(150).alpha(0).setListener(new AnimatorListenerAdapter() {
             public void onAnimationEnd(Animator animation) {
-                mWaterDropView.animate().alpha(0).setListener(new AnimatorListenerAdapter() {
-                    public void onAnimationEnd(Animator animation) {
-                        mWaterDropView.setVisibility(GONE);
-                        mWaterDropView.setAlpha(1);
-                    }
-                });
+                mWaterDropView.setVisibility(GONE);
+                mWaterDropView.setAlpha(1);
             }
         });
-        animator.start();//开始回弹
-        postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                mProgressDegree = (mProgressDegree + 30) % 360;
-                invalidate();
-                if (mState == RefreshState.Refreshing) {
-                    postDelayed(this, 100);
-                }
-            }
-        },100);
     }
 
     @Override
-    public void onFinish(RefreshLayout layout) {
+    public int onFinish(@NonNull RefreshLayout layout, boolean success) {
+        mProgressDrawable.stop();
+        return 0;
     }
 
-    @Override
-    public void setPrimaryColors(int... colors) {
+    /**
+     * @param colors 对应Xml中配置的 srlPrimaryColor srlAccentColor
+     * @deprecated 请使用 {@link RefreshLayout#setPrimaryColorsId(int...)}
+     */
+    @Override@Deprecated
+    public void setPrimaryColors(@ColorInt int ... colors) {
         if (colors.length > 0) {
             mWaterDropView.setIndicatorColor(colors[0]);
         }
     }
 
     @NonNull
-    @Override
-    public View getView() {
-        return this;
-    }
-
     @Override
     public SpinnerStyle getSpinnerStyle() {
         return SpinnerStyle.Scale;

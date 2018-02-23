@@ -1,5 +1,7 @@
 package com.scwang.smartrefresh.layout.listener;
 
+import android.support.annotation.NonNull;
+
 import com.scwang.smartrefresh.layout.api.RefreshFooter;
 import com.scwang.smartrefresh.layout.api.RefreshHeader;
 import com.scwang.smartrefresh.layout.api.RefreshLayout;
@@ -18,6 +20,11 @@ public class SimpleMultiPurposeListener implements OnMultiPurposeListener {
     }
 
     @Override
+    public void onHeaderReleased(RefreshHeader header, int headerHeight, int extendHeight) {
+
+    }
+
+    @Override
     public void onHeaderReleasing(RefreshHeader header, float percent, int offset, int footerHeight, int extendHeight) {
 
     }
@@ -28,7 +35,7 @@ public class SimpleMultiPurposeListener implements OnMultiPurposeListener {
     }
 
     @Override
-    public void onHeaderFinish(RefreshHeader header) {
+    public void onHeaderFinish(RefreshHeader header, boolean success) {
 
     }
 
@@ -38,32 +45,38 @@ public class SimpleMultiPurposeListener implements OnMultiPurposeListener {
     }
 
     @Override
+    public void onFooterReleased(RefreshFooter footer, int footerHeight, int extendHeight) {
+
+    }
+
+    @Override
     public void onFooterReleasing(RefreshFooter footer, float percent, int offset, int footerHeight, int extendHeight) {
 
     }
 
     @Override
-    public void onFooterStartAnimator(RefreshFooter footer, int headHeight, int extendHeight) {
+    public void onFooterStartAnimator(RefreshFooter footer, int headerHeight, int extendHeight) {
 
     }
 
     @Override
-    public void onFooterFinish(RefreshFooter footer) {
+    public void onFooterFinish(RefreshFooter footer, boolean success) {
 
     }
 
     @Override
-    public void onRefresh(RefreshLayout refreshlayout) {
+    public void onRefresh(@NonNull RefreshLayout refreshLayout) {
 
     }
 
     @Override
-    public void onLoadmore(RefreshLayout refreshlayout) {
+    public void onLoadMore(@NonNull RefreshLayout refreshLayout) {
 
     }
 
     @Override
-    public void onStateChanged(RefreshLayout refreshLayout, RefreshState oldState, RefreshState newState) {
+    public void onStateChanged(@NonNull RefreshLayout refreshLayout, @NonNull RefreshState oldState, @NonNull RefreshState newState) {
 
     }
+
 }

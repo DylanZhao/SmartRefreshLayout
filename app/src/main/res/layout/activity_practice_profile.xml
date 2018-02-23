@@ -9,15 +9,12 @@
     tools:context="com.scwang.refreshlayout.activity.practice.ProfilePracticeActivity">
 
     <com.scwang.smartrefresh.layout.SmartRefreshLayout
-        android:id="@+id/smartLayout"
+        android:id="@+id/refreshLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:srlEnablePreviewInEditMode="false"
-        app:srlHeaderMaxDragRate="0.9"
-        app:srlFooterMaxDragRate="0.9">
-        <com.scwang.smartrefresh.layout.header.FalsifyHeader
-            android:layout_width="match_parent"
-            android:layout_height="200dp" />
+        app:srlEnablePureScrollMode="true"
+        app:srlEnableLoadMore="true"
+        app:srlDragRate="0.75">
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
@@ -174,13 +171,10 @@
             </LinearLayout>
 
         </LinearLayout>
-        <com.scwang.smartrefresh.layout.header.FalsifyHeader
-            android:layout_width="match_parent"
-            android:layout_height="200dp" />
     </com.scwang.smartrefresh.layout.SmartRefreshLayout>
 
     <com.github.mmin18.widget.RealtimeBlurView
-        android:id="@+id/blurview"
+        android:id="@+id/blurView"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:visibility="visible"

@@ -1,6 +1,5 @@
 package com.scwang.smartrefresh.header;
 
-import android.support.annotation.RequiresApi;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
@@ -8,11 +7,11 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.PointF;
-import android.os.Build;
+import android.support.annotation.ColorInt;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.util.AttributeSet;
-import android.view.View;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.Animation;
 import android.view.animation.Transformation;
 
 import com.scwang.smartrefresh.header.storehouse.StoreHouseBarItem;
@@ -20,16 +19,22 @@ import com.scwang.smartrefresh.header.storehouse.StoreHousePath;
 import com.scwang.smartrefresh.layout.api.RefreshHeader;
 import com.scwang.smartrefresh.layout.api.RefreshKernel;
 import com.scwang.smartrefresh.layout.api.RefreshLayout;
-import com.scwang.smartrefresh.layout.constant.RefreshState;
-import com.scwang.smartrefresh.layout.constant.SpinnerStyle;
+import com.scwang.smartrefresh.layout.internal.InternalAbstract;
 import com.scwang.smartrefresh.layout.util.DensityUtil;
 
 import java.util.ArrayList;
+import java.util.List;
 
-public class StoreHouseHeader extends View implements RefreshHeader {
+/**
+ * StoreHouseHeader
+ * Created by SCWANG on 2017/5/31.
+ * from https://github.com/liaohuqiu/android-Ultra-Pull-To-Refresh
+ */
+@SuppressWarnings({"unused", "UnusedReturnValue", "SameParameterValue"})
+public class StoreHouseHeader extends InternalAbstract implements RefreshHeader {
 
     //<editor-fold desc="Field">
-    public ArrayList<StoreHouseBarItem> mItemList = new ArrayList<StoreHouseBarItem>();
+    public List<StoreHouseBarItem> mItemList = new ArrayList<>();
 
     private int mLineWidth = -1;
     private float mScale = 1;
@@ -51,77 +56,67 @@ public class StoreHouseHeader extends View implements RefreshHeader {
     private int mLoadingAniSegDuration = 1000;
     private static final int mLoadingAniItemDuration = 400;
 
-    private Transformation mTransformation = new Transformation();
-    private boolean mIsInLoading = false;
-    private AniController mAniController = new AniController();
     private int mTextColor = Color.WHITE;
     private int mBackgroundColor = 0;
+    private boolean mIsInLoading = false;
+    private boolean mEnableFadeAnimation = false;
     private Matrix mMatrix = new Matrix();
     private RefreshKernel mRefreshKernel;
+    private AniController mAniController = new AniController();
+    private Transformation mTransformation = new Transformation();
     //</editor-fold>
 
     //<editor-fold desc="View">
     public StoreHouseHeader(Context context) {
-        super(context);
-        this.initView(context, null);
+        this(context, null);
     }
 
     public StoreHouseHeader(Context context, AttributeSet attrs) {
-        super(context, attrs);
-        this.initView(context, attrs);
+        this(context, attrs, 0);
     }
 
     public StoreHouseHeader(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        this.initView(context, attrs);
-    }
 
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-    public StoreHouseHeader(Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
-        super(context, attrs, defStyleAttr, defStyleRes);
-        this.initView(context, attrs);
-    }
-
-    private void initView(Context context, AttributeSet attrs) {
         DensityUtil density = new DensityUtil();
         mLineWidth = density.dip2px(1);
         mDropHeight = density.dip2px(40);
         mHorizontalRandomness = Resources.getSystem().getDisplayMetrics().widthPixels / 2;
-//        setBackgroundColor(0xff333333);
         mBackgroundColor = 0xff333333;
         setTextColor(0xffcccccc);
 
         TypedArray ta = context.obtainStyledAttributes(attrs, R.styleable.StoreHouseHeader);
         mLineWidth = ta.getDimensionPixelOffset(R.styleable.StoreHouseHeader_shhLineWidth, mLineWidth);
+        mDropHeight = ta.getDimensionPixelOffset(R.styleable.StoreHouseHeader_shhDropHeight, mDropHeight);
+        mEnableFadeAnimation = ta.getBoolean(R.styleable.StoreHouseHeader_shhEnableFadeAnimation, mEnableFadeAnimation);
         if (ta.hasValue(R.styleable.StoreHouseHeader_shhText)) {
             initWithString(ta.getString(R.styleable.StoreHouseHeader_shhText));
         } else {
             initWithString("StoreHouse");
         }
         ta.recycle();
+
+        setMinimumHeight(mDrawZoneHeight + DensityUtil.dp2px(40));
     }
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int height = getTopOffset() + mDrawZoneHeight + getBottomOffset();
-        heightMeasureSpec = MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY);
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+//        int height = getTopOffset() + mDrawZoneHeight + getBottomOffset();
+//        heightMeasureSpec = MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY);
+        setMeasuredDimension(resolveSize(getSuggestedMinimumWidth(), widthMeasureSpec),
+                resolveSize(getSuggestedMinimumHeight(), heightMeasureSpec));
 
         mOffsetX = (getMeasuredWidth() - mDrawZoneWidth) / 2;
-        mOffsetY = getTopOffset();
-        mDropHeight = getTopOffset();
+        mOffsetY = (getMeasuredHeight() - mDrawZoneHeight) / 2;//getTopOffset();
+        mDropHeight = getMeasuredHeight() / 2;//getTopOffset();
     }
 
     @Override
-    public void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        float progress = mProgress;
-        int c1 = canvas.save();
-        int len = mItemList.size();
+    protected void dispatchDraw(Canvas canvas) {
 
-        if (isInEditMode()) {
-            progress = 1;
-        }
+        final int c1 = canvas.save();
+        final int len = mItemList.size();
+        final float progress = isInEditMode() ? 1 : mProgress;
 
         for (int i = 0; i < len; i++) {
 
@@ -171,20 +166,13 @@ public class StoreHouseHeader extends View implements RefreshHeader {
             invalidate();
         }
         canvas.restoreToCount(c1);
-    }
 
-    @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-        mRefreshKernel = null;
+        super.dispatchDraw(canvas);
     }
 
     //</editor-fold>
 
     //<editor-fold desc="API">
-    public int getLoadingAniDuration() {
-        return mLoadingAniDuration;
-    }
 
     public StoreHouseHeader setLoadingAniDuration(int duration) {
         mLoadingAniDuration = duration;
@@ -200,7 +188,7 @@ public class StoreHouseHeader extends View implements RefreshHeader {
         return this;
     }
 
-    public StoreHouseHeader setTextColor(int color) {
+    public StoreHouseHeader setTextColor(@ColorInt int color) {
         mTextColor = color;
         for (int i = 0; i < mItemList.size(); i++) {
             mItemList.get(i).setColor(color);
@@ -226,7 +214,7 @@ public class StoreHouseHeader extends View implements RefreshHeader {
 
     public StoreHouseHeader initWithStringArray(int id) {
         String[] points = getResources().getStringArray(id);
-        ArrayList<float[]> pointList = new ArrayList<float[]>();
+        ArrayList<float[]> pointList = new ArrayList<>();
         for (String point : points) {
             String[] x = point.split(",");
             float[] f = new float[4];
@@ -239,16 +227,12 @@ public class StoreHouseHeader extends View implements RefreshHeader {
         return this;
     }
 
-    public float getScale() {
-        return mScale;
-    }
-
     public StoreHouseHeader setScale(float scale) {
         mScale = scale;
         return this;
     }
 
-    public StoreHouseHeader initWithPointList(ArrayList<float[]> pointList) {
+    public StoreHouseHeader initWithPointList(List<float[]> pointList) {
 
         float drawWidth = 0;
         float drawHeight = 0;
@@ -279,103 +263,71 @@ public class StoreHouseHeader extends View implements RefreshHeader {
     }
     //</editor-fold>
 
-    //<editor-fold desc="background">
-    private Runnable restoreRunable;
-    private void restoreRefreshLayoutBackground() {
-        if (restoreRunable != null) {
-            restoreRunable.run();
-            restoreRunable = null;
-        }
-    }
-    private void replaceRefreshLayoutBackground(RefreshLayout refreshLayout) {
-//        if (restoreRunable == null) {
-//            restoreRunable = new Runnable() {
-//                Drawable drawable = refreshLayout.getLayout().getBackground();
-//                @Override
-//                public void run() {
-//                    refreshLayout.getLayout().setBackgroundDrawable(drawable);
-//                }
-//            };
-//            refreshLayout.getLayout().setBackgroundDrawable(getBackground());
-//        }
-    }
-    //</editor-fold>
+    //<editor-fold desc="RefreshHeader">
 
-    //<editor-fold desc="private">
-    private void setProgress(float progress) {
-        mProgress = progress;
+    @Override
+    public void onInitialized(@NonNull RefreshKernel kernel, int height, int extendHeight) {
+        kernel.requestDrawBackgroundForHeader(mBackgroundColor);
+        mRefreshKernel = kernel;
     }
 
-    private int getTopOffset() {
-        return getPaddingTop() + DensityUtil.dp2px(10);
+    @Override
+    public void onPulling(float percent, int offset, int height, int extendHeight) {
+        mProgress = (percent * .8f);
+        invalidate();
     }
 
-    private int getBottomOffset() {
-        return getPaddingBottom() + DensityUtil.dp2px(10);
+    @Override
+    public void onReleasing(float percent, int offset, int height, int extendHeight) {
+        onPulling(percent, offset, height, extendHeight);
     }
 
-    private void beginLoading() {
+    @Override
+    public void onReleased(@NonNull RefreshLayout layout, int height, int extendHeight) {
         mIsInLoading = true;
         mAniController.start();
         invalidate();
     }
 
-    private void loadFinish() {
+    @Override
+    public int onFinish(@NonNull RefreshLayout layout, boolean success) {
         mIsInLoading = false;
         mAniController.stop();
-    }
-    //</editor-fold>
-
-    //<editor-fold desc="RefreshHeader">
-
-    @Override
-    public void onInitialized(RefreshKernel kernel, int height, int extendHeight) {
-        if (mBackgroundColor != 0) {
-            kernel.requestDrawBackgoundForHeader(mBackgroundColor);
+        if (success && mEnableFadeAnimation) {
+            startAnimation(new Animation() {{
+                setDuration(250);
+                setInterpolator(new AccelerateInterpolator());
+            }
+                @Override
+                protected void applyTransformation(float interpolatedTime, Transformation t) {
+                    mProgress = (1 - interpolatedTime);
+                    invalidate();
+                    if (interpolatedTime == 1) {
+                        for (int i = 0; i < mItemList.size(); i++) {
+                            mItemList.get(i).resetPosition(mHorizontalRandomness);
+                        }
+                    }
+                }
+            });
+            return 250;
+        } else {
+            for (int i = 0; i < mItemList.size(); i++) {
+                mItemList.get(i).resetPosition(mHorizontalRandomness);
+            }
         }
-        mRefreshKernel = kernel;
+        return 0;
     }
 
-    @Override
-    public void onPullingDown(float percent, int offset, int headHeight, int extendHeight) {
-        setProgress(percent * .8f);
-        invalidate();
-    }
-
-    @Override
-    public void onReleasing(float percent, int offset, int headHeight, int extendHeight) {
-        setProgress(percent * .8f);
-        invalidate();
-    }
-
-    @Override
-    public void onStartAnimator(RefreshLayout layout, int headHeight, int extendHeight) {
-        beginLoading();
-    }
-
-    @Override
-    public void onStateChanged(RefreshLayout refreshLayout, RefreshState oldState, RefreshState newState) {
-        if (newState == RefreshState.ReleaseToRefresh) {
-            replaceRefreshLayoutBackground(refreshLayout);
-        } else if (newState == RefreshState.None) {
-            restoreRefreshLayoutBackground();
-        }
-    }
-
-    @Override
-    public void onFinish(RefreshLayout layout) {
-        loadFinish();
-        for (int i = 0; i < mItemList.size(); i++) {
-            mItemList.get(i).resetPosition(mHorizontalRandomness);
-        }
-    }
-
-    @Override
-    public void setPrimaryColors(int... colors) {
+    /**
+     * @param colors 对应Xml中配置的 srlPrimaryColor srlAccentColor
+     * @deprecated 请使用 {@link RefreshLayout#setPrimaryColorsId(int...)}
+     */
+    @Override@Deprecated
+    public void setPrimaryColors(@ColorInt int ... colors) {
         if (colors.length > 0) {
             mBackgroundColor = colors[0];
             if (mRefreshKernel != null) {
-                mRefreshKernel.requestDrawBackgoundForHeader(colors[0]);
+                mRefreshKernel.requestDrawBackgroundForHeader(colors[0]);
             }
             if (colors.length > 1) {
                 setTextColor(colors[1]);
@@ -383,16 +335,6 @@ public class StoreHouseHeader extends View implements RefreshHeader {
         }
     }
 
-    @NonNull
-    @Override
-    public View getView() {
-        return this;
-    }
-
-    @Override
-    public SpinnerStyle getSpinnerStyle() {
-        return SpinnerStyle.Translate;
-    }
     //</editor-fold>
 
     private class AniController implements Runnable {
@@ -435,8 +377,8 @@ public class StoreHouseHeader extends View implements RefreshHeader {
             }
 
             mTick++;
-            if (mRunning) {
-                postDelayed(this, mInterval);
+            if (mRunning && mRefreshKernel != null) {
+                mRefreshKernel.getRefreshLayout().getLayout().postDelayed(this, mInterval);
             }
         }
 

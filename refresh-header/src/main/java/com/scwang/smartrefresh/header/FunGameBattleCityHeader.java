@@ -1,16 +1,15 @@
 package com.scwang.smartrefresh.header;
 
-import android.support.annotation.RequiresApi;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Point;
 import android.graphics.RectF;
-import android.os.Build;
-import android.support.annotation.Nullable;
+import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.util.SparseArray;
 
 import com.scwang.smartrefresh.header.fungame.FunGameView;
+import com.scwang.smartrefresh.layout.api.RefreshKernel;
 import com.scwang.smartrefresh.layout.util.DensityUtil;
 
 import java.util.LinkedList;
@@ -20,9 +19,11 @@ import java.util.Random;
 /**
  * Created by Hitomis on 2016/3/09.
  * email:196425254@qq.com
+ * from https://github.com/Hitomis/FunGameRefresh
  */
 public class FunGameBattleCityHeader extends FunGameView {
 
+    //<editor-fold desc="属性变量">
     /**
      * 轨道数量
      */
@@ -119,52 +120,37 @@ public class FunGameBattleCityHeader extends FunGameView {
      * 表示第一次标示值，用于添加第一辆敌方坦克逻辑
      */
     private boolean once = true;
+    //</editor-fold>
 
+    //<editor-fold desc="初始方法">
     public FunGameBattleCityHeader(Context context) {
-        super(context);
+        this(context, null);
     }
 
     public FunGameBattleCityHeader(Context context, AttributeSet attrs) {
-        super(context, attrs);
+        this(context, attrs, 0);
     }
 
     public FunGameBattleCityHeader(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
-    }
 
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-    public FunGameBattleCityHeader(Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
-        super(context, attrs, defStyleAttr, defStyleRes);
+        random = new Random();
     }
 
     @Override
-    protected void initConcreteView() {
-        random = new Random();
-
-        controllerSize = mHeaderHeight/TANK_ROW_NUM;
+    public void onInitialized(@NonNull RefreshKernel kernel, int height, int extendHeight) {
+        controllerSize = height / TANK_ROW_NUM;
         barrelSize = (int) Math.floor(controllerSize * TANK_BARREL_RATIO + .5f);
         bulletRadius = (barrelSize - 2 * DIVIDING_LINE_SIZE) * .5f;
-
-        resetConfigParams();
+        super.onInitialized(kernel, height, extendHeight);
     }
 
-    @Override
-    protected void drawGame(Canvas canvas, int width, int height) {
-        drawSelfTank(canvas,width);
-        if (status == STATUS_GAME_PLAY || status == STATUS_GAME_FINISHED) {
-            drawEnemyTank(canvas,width);
-            makeBulletPath(canvas,width);
-        }
-        if (isInEditMode()) {
-            drawTank(canvas, new RectF(controllerSize, 0, controllerSize * 2, controllerSize));
-            drawTank(canvas, new RectF(0, controllerSize, controllerSize, controllerSize*2));
-            drawTank(canvas, new RectF(controllerSize * 3, controllerSize * 2, controllerSize * 4, controllerSize*3));
-        }
-    }
+    //</editor-fold>
 
-    @Override
+    //<editor-fold desc="游戏控制">
+
     protected void resetConfigParams() {
-        status = FunGameView.STATUS_GAME_PREPAR;
+        status = FunGameView.STATUS_GAME_PREPARE;
         controllerPosition = DIVIDING_LINE_SIZE;
 
         enemySpeed = DensityUtil.dp2px(1);
@@ -196,44 +182,6 @@ public class FunGameBattleCityHeader extends FunGameView {
         float left = - (controllerSize + barrelSize);
         float top = index * (controllerSize) + DIVIDING_LINE_SIZE;
         return new RectF(left, top, left + barrelSize * 2.5f, top + controllerSize);
-    }
-
-    /**
-     * 绘制子弹路径
-     * @param canvas 默认画布
-     */
-    private void makeBulletPath(Canvas canvas, int width) {
-        mPaint.setColor(mModelColor);
-        offsetMBulletX += bulletSpeed;
-        if (offsetMBulletX / bulletSpace == 1) {
-            offsetMBulletX = 0;
-        }
-
-        if (offsetMBulletX == 0) {
-            Point bulletPoint = new Point();
-            bulletPoint.x = width - controllerSize - barrelSize;
-            bulletPoint.y = (int) (controllerPosition + controllerSize * .5f);
-            mBulletList.offer(bulletPoint);
-        }
-
-        boolean isOversetp = false;
-        for (Point point : mBulletList) {
-            if (checkWipeOutETank(point)) {
-                usedBullet = point;
-                continue;
-            }
-            if (point.x + bulletRadius <= 0) {
-                isOversetp = true;
-            }
-            drawBullet(canvas, point);
-        }
-
-        if (isOversetp) {
-            mBulletList.poll();
-        }
-
-        mBulletList.remove(usedBullet);
-        usedBullet = null;
     }
 
     /**
@@ -284,16 +232,6 @@ public class FunGameBattleCityHeader extends FunGameView {
     }
 
     /**
-     * 绘制子弹
-     * @param canvas 默认画布
-     * @param point 子弹圆心坐标点
-     */
-    private void drawBullet(Canvas canvas, Point point) {
-        point.x -= bulletSpeed;
-        canvas.drawCircle(point.x, point.y, bulletRadius, mPaint);
-    }
-
-    /**
      * 判断我方坦克是否与敌方坦克相撞
      * @param index 轨道下标
      * @param selfX 我方坦克所在坐标X值
@@ -307,6 +245,79 @@ public class FunGameBattleCityHeader extends FunGameView {
             isCrash = true;
         }
         return isCrash;
+    }
+
+    /**
+     * 随机定位一个轨道下标值
+     * @return 轨道下标
+     */
+    private int appearanceOption() {
+        return random.nextInt(TANK_ROW_NUM);
+    }
+    //</editor-fold>
+
+    //<editor-fold desc="绘制方法">
+
+    @Override
+    protected void drawGame(Canvas canvas, int width, int height) {
+        drawSelfTank(canvas,width);
+        if (status == STATUS_GAME_PLAY || status == STATUS_GAME_FINISHED || status == STATUS_GAME_FAIL) {
+            drawEnemyTank(canvas,width);
+            drawBulletPath(canvas,width);
+        }
+        if (isInEditMode()) {
+            drawTank(canvas, new RectF(controllerSize, 0, controllerSize * 2, controllerSize));
+            drawTank(canvas, new RectF(0, controllerSize, controllerSize, controllerSize*2));
+            drawTank(canvas, new RectF(controllerSize * 3, controllerSize * 2, controllerSize * 4, controllerSize*3));
+        }
+    }
+
+    /**
+     * 绘制子弹路径
+     * @param canvas 默认画布
+     */
+    private void drawBulletPath(Canvas canvas, int width) {
+        mPaint.setColor(mModelColor);
+        offsetMBulletX += bulletSpeed;
+        if (offsetMBulletX / bulletSpace == 1) {
+            offsetMBulletX = 0;
+        }
+
+        if (offsetMBulletX == 0) {
+            Point bulletPoint = new Point();
+            bulletPoint.x = width - controllerSize - barrelSize;
+            bulletPoint.y = (int) (controllerPosition + controllerSize * .5f);
+            mBulletList.offer(bulletPoint);
+        }
+
+        boolean isOverStep = false;
+        for (Point point : mBulletList) {
+            if (checkWipeOutETank(point)) {
+                usedBullet = point;
+                continue;
+            }
+            if (point.x + bulletRadius <= 0) {
+                isOverStep = true;
+            }
+            drawBullet(canvas, point);
+        }
+
+        if (isOverStep) {
+            mBulletList.poll();
+        }
+
+        mBulletList.remove(usedBullet);
+        usedBullet = null;
+    }
+
+    /**
+     * 绘制子弹
+     * @param canvas 默认画布
+     * @param point 子弹圆心坐标点
+     */
+    private void drawBullet(Canvas canvas, Point point) {
+        point.x -= bulletSpeed;
+        canvas.drawCircle(point.x, point.y, bulletRadius, mPaint);
     }
 
     /**
@@ -349,7 +360,7 @@ public class FunGameBattleCityHeader extends FunGameView {
         }
 
         boolean isOverstep = false;
-        int option = apperanceOption();
+        int option = appearanceOption();
         for (int i = 0; i < TANK_ROW_NUM; i++) {
             Queue<RectF> rectFQueue = eTankSparseArray.get(i);
 
@@ -391,12 +402,6 @@ public class FunGameBattleCityHeader extends FunGameView {
 
     }
 
-    /**
-     * 随机定位一个轨道下标值
-     * @return 轨道下标
-     */
-    private int apperanceOption() {
-        return random.nextInt(TANK_ROW_NUM);
-    }
+    //</editor-fold>
 
 }

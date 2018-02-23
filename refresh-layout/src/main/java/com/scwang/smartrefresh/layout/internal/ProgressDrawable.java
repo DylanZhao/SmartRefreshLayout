@@ -19,6 +19,8 @@ import android.view.animation.LinearInterpolator;
 
 public class ProgressDrawable extends Drawable implements Animatable {
 
+    private int mWidth = 0;
+    private int mHeight = 0;
     private int mProgressDegree = 0;
     private ValueAnimator mValueAnimator;
     private Path mPath = new Path();
@@ -39,16 +41,22 @@ public class ProgressDrawable extends Drawable implements Animatable {
     @Override
     public void draw(@NonNull Canvas canvas) {
         Rect bounds = getBounds();
-        int width = bounds.width();
-        int height = bounds.height();
-        canvas.save();
-        canvas.rotate(mProgressDegree, (width) / 2, (height) / 2);
+        final int width = bounds.width();
+        final int height = bounds.height();
         final int r = Math.max(1, width / 20);
-        for (int i = 0; i < 12; i++) {
+
+        if (mWidth != width || mHeight != height) {
             mPath.reset();
             mPath.addCircle(width - r, height / 2, r, Path.Direction.CW);
             mPath.addRect(width - 5 * r, height / 2 - r, width - r, height / 2 + r, Path.Direction.CW);
             mPath.addCircle(width - 5 * r, height / 2, r, Path.Direction.CW);
+            mWidth = width;
+            mHeight = height;
+        }
+
+        canvas.save();
+        canvas.rotate(mProgressDegree, (width) / 2, (height) / 2);
+        for (int i = 0; i < 12; i++) {
             mPaint.setAlpha((i+5) * 0x11);
             canvas.rotate(30, (width) / 2, (height) / 2);
             canvas.drawPath(mPath, mPaint);
@@ -74,10 +82,13 @@ public class ProgressDrawable extends Drawable implements Animatable {
 
     private void setupAnimators() {
         mValueAnimator = ValueAnimator.ofInt(30, 3600);
-        mValueAnimator.addUpdateListener(animation1 -> {
-            int value = (int) animation1.getAnimatedValue();
-            mProgressDegree = 30 * (value / 30);
-            invalidateSelf();
+        mValueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                int value = (int) animation.getAnimatedValue();
+                mProgressDegree = 30 * (value / 30);
+                invalidateSelf();
+            }
         });
         mValueAnimator.setDuration(10000);
         mValueAnimator.setInterpolator(new LinearInterpolator());
@@ -104,11 +115,4 @@ public class ProgressDrawable extends Drawable implements Animatable {
         return mValueAnimator.isRunning();
     }
 
-    public int width() {
-        return getBounds().width();
-    }
-
-    public int height() {
-        return getBounds().height();
-    }
 }

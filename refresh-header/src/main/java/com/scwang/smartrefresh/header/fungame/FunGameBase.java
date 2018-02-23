@@ -1,15 +1,12 @@
 package com.scwang.smartrefresh.header.fungame;
 
-import android.support.annotation.RequiresApi;
+import android.annotation.SuppressLint;
 import android.content.Context;
-import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.FrameLayout;
 
 import com.scwang.smartrefresh.layout.api.RefreshContent;
 import com.scwang.smartrefresh.layout.api.RefreshHeader;
@@ -17,7 +14,8 @@ import com.scwang.smartrefresh.layout.api.RefreshKernel;
 import com.scwang.smartrefresh.layout.api.RefreshLayout;
 import com.scwang.smartrefresh.layout.constant.RefreshState;
 import com.scwang.smartrefresh.layout.constant.SpinnerStyle;
-import com.scwang.smartrefresh.layout.impl.RefreshLayoutHeaderHooker;
+import com.scwang.smartrefresh.layout.internal.InternalAbstract;
+import com.scwang.smartrefresh.layout.util.DensityUtil;
 
 import static android.view.MotionEvent.ACTION_MASK;
 
@@ -25,49 +23,28 @@ import static android.view.MotionEvent.ACTION_MASK;
  * 游戏 header
  * Created by SCWANG on 2017/6/17.
  */
-
-public class FunGameBase extends FrameLayout implements RefreshHeader {
+@SuppressLint("RestrictedApi")
+public abstract class FunGameBase extends InternalAbstract implements RefreshHeader {
 
     //<editor-fold desc="Field">
     protected int mOffset;
     protected int mHeaderHeight;
-    protected RefreshState mState;
-    protected boolean mManualOperation;
-    protected Runnable mManualOperationListener;
+    protected int mScreenHeightPixels;
     protected float mTouchY;
+    protected boolean mIsFinish;
+    protected boolean mLastFinish;
+    protected boolean mManualOperation;
+    protected RefreshState mState;
     protected RefreshKernel mRefreshKernel;
     protected RefreshContent mRefreshContent;
     //</editor-fold>
 
     //<editor-fold desc="View">
-    public FunGameBase(Context context) {
-        super(context);
-    }
-
-    public FunGameBase(Context context, @Nullable AttributeSet attrs) {
-        super(context, attrs);
-    }
 
     public FunGameBase(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-    }
-
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-    public FunGameBase(Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
-        super(context, attrs, defStyleAttr, defStyleRes);
-    }
-
-    @Override
-    public void setTranslationY(float translationY) {
-        if (!isInEditMode()) {
-            super.setTranslationY(translationY);
-        }
-    }
-
-    @Override
-    public void setLayoutParams(ViewGroup.LayoutParams params) {
-        super.setLayoutParams(params);
-        params.height = -3;
+        setMinimumHeight(DensityUtil.dp2px(100));
+        mScreenHeightPixels = context.getResources().getDisplayMetrics().heightPixels;
     }
 
     @Override
@@ -77,7 +54,7 @@ public class FunGameBase extends FrameLayout implements RefreshHeader {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (mState == RefreshState.Refreshing) {
+        if (mState == RefreshState.Refreshing || mState == RefreshState.RefreshFinish) {
             if (!mManualOperation) {
                 onManualOperationStart();
             }
@@ -88,13 +65,27 @@ public class FunGameBase extends FrameLayout implements RefreshHeader {
                     break;
                 case MotionEvent.ACTION_MOVE:
                     float dy = event.getRawY() - mTouchY;
-                    mRefreshKernel.moveSpinnerInfinitely(dy);
+                    if (dy >= 0) {
+                        final double M = mHeaderHeight * 2;
+                        final double H = mScreenHeightPixels * 2 / 3;
+                        final double x = Math.max(0, dy * 0.5);
+                        final double y = Math.min(M * (1 - Math.pow(100, -x / H)), x);// 公式 y = M(1-40^(-x/H))
+                        mRefreshKernel.moveSpinner((int) y, false);
+                    } else {
+                        final double M = mHeaderHeight * 2;
+                        final double H = mScreenHeightPixels * 2 / 3;
+                        final double x = -Math.min(0, dy * 0.5);
+                        final double y = -Math.min(M * (1 - Math.pow(100, -x / H)), x);// 公式 y = M(1-40^(-x/H))
+                        mRefreshKernel.moveSpinner((int) y, false);
+                    }
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
-                    mTouchY = 0;
-                    mRefreshKernel.moveSpinner(mHeaderHeight, true);
                     onManualOperationRelease();
+                    mTouchY = -1;
+                    if (mIsFinish) {
+                        mRefreshKernel.moveSpinner(mHeaderHeight, true);
+                    }
                     break;
             }
             return true;
@@ -102,43 +93,53 @@ public class FunGameBase extends FrameLayout implements RefreshHeader {
         return super.onTouchEvent(event);
     }
 
-    @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-        mRefreshKernel = null;
-        mRefreshContent = null;
-    }
-
     //</editor-fold>
 
     //<editor-fold desc="abstract">
-    boolean enableLoadmore;
+    boolean enableLoadMore;
     protected void onManualOperationStart() {
-        mManualOperation = true;
-        mRefreshContent = mRefreshKernel.getRefreshContent();
-        mRefreshContent.getView().offsetTopAndBottom(mHeaderHeight);
-        enableLoadmore = mRefreshKernel.getRefreshLayout().isEnableLoadmore();
-        mRefreshKernel.getRefreshLayout().setEnableLoadmore(false);
+        if (!mManualOperation) {
+            mManualOperation = true;
+            mRefreshContent = mRefreshKernel.getRefreshContent();
+            enableLoadMore = mRefreshKernel.getRefreshLayout().isEnableLoadMore();
+            mRefreshKernel.getRefreshLayout().setEnableLoadMore(false);
+            View contentView = mRefreshContent.getView();
+            MarginLayoutParams params = (MarginLayoutParams)contentView.getLayoutParams();
+            params.topMargin += mHeaderHeight;
+            contentView.setLayoutParams(params);
+        }
     }
 
-    protected void onManualOperationMove(float percent, int offset, int headHeight, int extendHeight) {
-
-    }
+    protected abstract void onManualOperationMove(float percent, int offset, int height, int extendHeight);
 
     protected void onManualOperationRelease() {
-        mManualOperation = false;
-        mRefreshContent.getView().offsetTopAndBottom(-mHeaderHeight);
-        mRefreshKernel.getRefreshLayout().setEnableLoadmore(enableLoadmore);
-        if (mManualOperationListener != null) {
-            mManualOperationListener.run();
+        if (mIsFinish) {
+            mManualOperation = false;
+            mRefreshKernel.getRefreshLayout().setEnableLoadMore(enableLoadMore);
+            if (mTouchY != -1) {//还没松手
+                onFinish(mRefreshKernel.getRefreshLayout(), mLastFinish);
+//                mRefreshKernel.setStateRefreshingFinish();
+                mRefreshKernel.setState(RefreshState.RefreshFinish);
+                mRefreshKernel.animSpinner(0);
+//                mRefreshKernel.getRefreshLayout().finishRefresh(0);
+            } else {
+                mRefreshKernel.moveSpinner(mHeaderHeight, true);
+            }
+            View contentView = mRefreshContent.getView();
+            MarginLayoutParams params = (MarginLayoutParams)contentView.getLayoutParams();
+            params.topMargin -= mHeaderHeight;
+            contentView.setLayoutParams(params);
+        } else {
+            mRefreshKernel.moveSpinner(0, true);
         }
     }
     //</editor-fold>
 
     //<editor-fold desc="RefreshHeader">
+
     @Override
-    public void onPullingDown(float percent, int offset, int headHeight, int extendHeight) {
-        if (mManualOperation) onManualOperationMove(percent, offset, headHeight, extendHeight);
+    public void onPulling(float percent, int offset, int height, int extendHeight) {
+        if (mManualOperation) onManualOperationMove(percent, offset, height, extendHeight);
         else {
             mOffset = offset;
             setTranslationY(mOffset - mHeaderHeight);
@@ -146,57 +147,53 @@ public class FunGameBase extends FrameLayout implements RefreshHeader {
     }
 
     @Override
-    public void onReleasing(float percent, int offset, int headHeight, int extendHeight) {
-        onPullingDown(percent, offset, headHeight, extendHeight);
+    public void onReleasing(float percent, int offset, int height, int extendHeight) {
+        onPulling(percent, offset, height, extendHeight);
     }
 
     @Override
-    public void onStartAnimator(RefreshLayout layout, int headHeight, int extendHeight) {
-
+    public void onStartAnimator(@NonNull RefreshLayout refreshLayout, int height, int extendHeight) {
+        mIsFinish = false;
+        setTranslationY(0);
     }
 
     @Override
-    public void onStateChanged(RefreshLayout refreshLayout, RefreshState oldState, RefreshState newState) {
+    public void onStateChanged(@NonNull RefreshLayout refreshLayout, @NonNull RefreshState oldState, @NonNull RefreshState newState) {
         mState = newState;
+
     }
 
     @Override
-    public void onInitialized(RefreshKernel kernel, int height, int extendHeight) {
+    public void onInitialized(@NonNull RefreshKernel kernel, int height, int extendHeight) {
         mRefreshKernel = kernel;
         mHeaderHeight = height;
-        setTranslationY(mOffset - mHeaderHeight);
-        kernel.registHeaderHook(new RefreshLayoutHeaderHooker() {
-            @Override
-            public void onHookFinishRefresh(SuperMethod supper, RefreshLayout layout) {
-                if (mManualOperation) {
-                    mManualOperationListener = supper::invoke;
-                    onFinish(layout);
-                } else {
-                    mManualOperationListener = null;
-                    supper.invoke();
+        if (!isInEditMode()) {
+            setTranslationY(mOffset - mHeaderHeight);
+            kernel.requestNeedTouchEventWhenRefreshing(true);
+        }
+    }
+
+    @Override
+    public int onFinish(@NonNull RefreshLayout layout, boolean success) {
+        mLastFinish = success;
+        if (!mIsFinish) {
+            mIsFinish = true;
+            if (mManualOperation) {
+                if (mTouchY == -1) {//已经放手
+                    onManualOperationRelease();
+                    onFinish(layout, success);
+                    return 0;
                 }
+                return Integer.MAX_VALUE;
             }
-        });
-    }
-
-    @Override
-    public void onFinish(RefreshLayout layout) {
-
-    }
-
-    @Override
-    public void setPrimaryColors(int... colors) {
+        }
+        return 0;
     }
 
     @NonNull
     @Override
-    public View getView() {
-        return this;
-    }
-
-    @Override
     public SpinnerStyle getSpinnerStyle() {
-        return SpinnerStyle.FixedFront;
+        return SpinnerStyle.MatchLayout;
     }
     //</editor-fold>
 }

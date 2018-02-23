@@ -4,77 +4,73 @@ import android.support.annotation.NonNull;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.scwang.smartrefresh.layout.SmartRefreshLayout;
 import com.scwang.smartrefresh.layout.api.RefreshHeader;
+import com.scwang.smartrefresh.layout.api.RefreshInternal;
 import com.scwang.smartrefresh.layout.api.RefreshKernel;
-import com.scwang.smartrefresh.layout.api.RefreshLayout;
-import com.scwang.smartrefresh.layout.constant.RefreshState;
-import com.scwang.smartrefresh.layout.constant.SpinnerStyle;
+
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 
 /**
  * 刷新头部包装
  * Created by SCWANG on 2017/5/26.
  */
+public class RefreshHeaderWrapper extends RefreshInternalWrapper implements RefreshHeader, InvocationHandler {
 
-public class RefreshHeaderWrapper implements RefreshHeader {
-    private View mWrapperView;
-    private SpinnerStyle mSpinnerStyle;
+    private RefreshKernel mRefreshKernel;
+    private Method mRequestDrawBackgroundForFooterMethod;
+    private Method mRequestRemeasureHeightForFooterMethod;
+    private Method mRequestNeedTouchEventWhenLoadingMethod;
 
     public RefreshHeaderWrapper(View wrapper) {
-        this.mWrapperView = wrapper;
-    }
-
-    @NonNull
-    public View getView() {
-        return mWrapperView;
+        super(wrapper);
     }
 
     @Override
-    public void onFinish(RefreshLayout layout) {
-
-    }
-
-    @Override
-    public void setPrimaryColors(int... colors) {
-
-    }
-
-    @NonNull
-    @Override
-    public SpinnerStyle getSpinnerStyle() {
-        if (mSpinnerStyle != null) {
-            return mSpinnerStyle;
-        }
-        ViewGroup.LayoutParams params = mWrapperView.getLayoutParams();
-        if (params != null) {
-            if (params.height == ViewGroup.LayoutParams.MATCH_PARENT) {
-                return mSpinnerStyle = SpinnerStyle.Scale;
+    public void onInitialized(@NonNull RefreshKernel kernel, int height, int extendHeight) {
+        if (mWrapperView instanceof RefreshInternal) {
+            RefreshKernel proxy = (RefreshKernel) Proxy.newProxyInstance(RefreshKernel.class.getClassLoader(), new Class[]{RefreshKernel.class}, this);
+            proxy.requestDrawBackgroundForFooter(0);
+            proxy.requestRemeasureHeightForFooter();
+            proxy.requestNeedTouchEventWhenLoading(false);
+            mRefreshKernel = kernel;
+            ((RefreshInternal) mWrapperView).onInitialized(proxy, height, extendHeight);
+        } else {
+            ViewGroup.LayoutParams params = mWrapperView.getLayoutParams();
+            if (params instanceof SmartRefreshLayout.LayoutParams) {
+                kernel.requestDrawBackgroundForHeader(((SmartRefreshLayout.LayoutParams) params).backgroundColor);
             }
         }
-        return mSpinnerStyle = SpinnerStyle.Translate;
     }
 
     @Override
-    public void onInitialized(RefreshKernel layout, int height, int extendHeight) {
-
-    }
-
-    @Override
-    public void onPullingDown(float percent, int offset, int headHeight, int extendHeight) {
-
-    }
-
-    @Override
-    public void onReleasing(float percent, int offset, int headHeight, int extendHeight) {
-
-    }
-
-    @Override
-    public void onStartAnimator(RefreshLayout layout, int headHeight, int extendHeight) {
-
-    }
-
-    @Override
-    public void onStateChanged(RefreshLayout refreshLayout, RefreshState oldState, RefreshState newState) {
-
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        Object returnValue = null;
+        if (mRefreshKernel != null) {
+            if (method.equals(mRequestDrawBackgroundForFooterMethod)) {
+                mRefreshKernel.requestDrawBackgroundForHeader((int) args[0]);
+            } else if (method.equals(mRequestRemeasureHeightForFooterMethod)) {
+                mRefreshKernel.requestRemeasureHeightForHeader();
+            } else if (method.equals(mRequestNeedTouchEventWhenLoadingMethod)) {
+                mRefreshKernel.requestNeedTouchEventWhenRefreshing((boolean) args[0]);
+            } else {
+                returnValue = method.invoke(mRefreshKernel, args);
+            }
+        }
+        if (method.getReturnType().equals(RefreshKernel.class)) {
+            if (mRefreshKernel == null && RefreshKernel.class.equals(method.getDeclaringClass())) {
+                if (mRequestDrawBackgroundForFooterMethod == null) {
+                    mRequestDrawBackgroundForFooterMethod = method;
+                } else if (mRequestRemeasureHeightForFooterMethod == null) {
+                    mRequestRemeasureHeightForFooterMethod = method;
+                } else if (mRequestNeedTouchEventWhenLoadingMethod == null) {
+                    mRequestNeedTouchEventWhenLoadingMethod = method;
+                }
+            }
+            return proxy;
+        }
+        return returnValue;
     }
 }

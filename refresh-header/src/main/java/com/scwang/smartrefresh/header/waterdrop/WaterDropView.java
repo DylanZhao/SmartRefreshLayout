@@ -7,7 +7,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.util.AttributeSet;
+import android.support.annotation.ColorInt;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 
@@ -15,9 +15,11 @@ import com.scwang.smartrefresh.layout.util.DensityUtil;
 
 
 /**
- * 下拉头中间的“水滴”
+ * 下拉头中间的 “水滴”
  * Created by xiayong on 2015/6/23.
+ * from https://github.com/THEONE10211024/WaterDropListView
  */
+@SuppressWarnings("unused")
 public class WaterDropView extends View {
 
     private Circle topCircle;
@@ -25,28 +27,14 @@ public class WaterDropView extends View {
 
     private Path mPath;
     private Paint mPaint;
-    private float mMaxCircleRadius;//圆半径最大值
-    private float mMinCircleRaidus;//圆半径最小值
+    private int mMaxCircleRadius;//圆半径最大值
+    private int mMinCircleRadius;//圆半径最小值
     private static int STROKE_WIDTH = 2;//边线宽度
     private final static int BACK_ANIM_DURATION = 180;
 
     public WaterDropView(Context context) {
         super(context);
-        initView(context, null);
-    }
 
-    public WaterDropView(Context context, AttributeSet attrs) {
-        super(context, attrs);
-        initView(context, attrs);
-    }
-
-    public WaterDropView(Context context, AttributeSet attrs, int defStyleAttr) {
-        super(context, attrs, defStyleAttr);
-        initView(context, attrs);
-    }
-
-    private void initView(Context context, AttributeSet attrs) {
-//        setBackgroundColor(0xffbbff11);
         topCircle = new Circle();
         bottomCircle = new Circle();
         mPath = new Path();
@@ -54,8 +42,8 @@ public class WaterDropView extends View {
         mPaint.setColor(Color.GRAY);
         mPaint.setAntiAlias(true);
         mPaint.setStyle(Paint.Style.FILL_AND_STROKE);
-        mPaint.setStrokeWidth(STROKE_WIDTH = DensityUtil.dp2px(1));
-        mPaint.setShadowLayer(STROKE_WIDTH, 0, 0, 0xff000000);
+        mPaint.setStrokeWidth(STROKE_WIDTH = DensityUtil.dp2px(1f));
+        mPaint.setShadowLayer(STROKE_WIDTH, STROKE_WIDTH/2, STROKE_WIDTH, 0x99000000);
         setLayerType(LAYER_TYPE_SOFTWARE, null);
 
         int padding = 4 * STROKE_WIDTH;
@@ -63,7 +51,7 @@ public class WaterDropView extends View {
 
         mPaint.setColor(Color.GRAY);
         mMaxCircleRadius = DensityUtil.dp2px(20);
-        mMinCircleRaidus = mMaxCircleRadius / 4;
+        mMinCircleRadius = mMaxCircleRadius / 5;
 
         topCircle.radius = (mMaxCircleRadius);
         bottomCircle.radius = (mMaxCircleRadius);
@@ -73,6 +61,10 @@ public class WaterDropView extends View {
 
         bottomCircle.x = (STROKE_WIDTH + mMaxCircleRadius);
         bottomCircle.y = (STROKE_WIDTH + mMaxCircleRadius);
+    }
+
+    public int getMaxCircleRadius() {
+        return mMaxCircleRadius;
     }
 
     @Override
@@ -88,7 +80,7 @@ public class WaterDropView extends View {
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
-        updateComleteState(getHeight());
+        updateCompleteState(getHeight());
     }
 
     @Override
@@ -116,9 +108,9 @@ public class WaterDropView extends View {
 
     private void makeBezierPath() {
         mPath.reset();
-        mPath.addCircle(bottomCircle.x, bottomCircle.y, bottomCircle.radius, Path.Direction.CCW);
-        if (bottomCircle.radius < topCircle.radius) {
-            mPath.addCircle(topCircle.x, topCircle.y, topCircle.radius, Path.Direction.CCW);
+        mPath.addCircle(topCircle.x, topCircle.y, topCircle.radius, Path.Direction.CCW);
+        if (bottomCircle.y > topCircle.y + DensityUtil.dp2px(1)) {
+            mPath.addCircle(bottomCircle.x, bottomCircle.y, bottomCircle.radius, Path.Direction.CCW);
             //获取两圆的两个切线形成的四个切点
             double angle = getAngle();
             float top_x1 = (float) (topCircle.x - topCircle.radius * Math.cos(angle));
@@ -139,22 +131,19 @@ public class WaterDropView extends View {
 
             mPath.quadTo((bottomCircle.x - bottomCircle.radius),
                     (bottomCircle.y + topCircle.y) / 2,
-
-                    bottom_x1,
-                    bottom_y1);
+                    bottom_x1,bottom_y1);
             mPath.lineTo(bottom_x2, bottom_y2);
 
             mPath.quadTo((bottomCircle.x + bottomCircle.radius),
                     (bottomCircle.y + top_y2) / 2,
-                    top_x2,
-                    top_y2);
-
-            mPath.close();
+                    top_x2,top_y2);
         }
+        mPath.close();
     }
 
     /**
      * 获得两个圆切线与圆心连线的夹角
+     * @return 夹角
      */
     private double getAngle() {
         if (bottomCircle.radius > topCircle.radius) {
@@ -168,42 +157,50 @@ public class WaterDropView extends View {
      * 上圆半径减速恢复至最大半径
      * 下圆半径减速恢复至最大半径
      * 圆心距减速从最大值减到0(下圆Y从当前位置移动到上圆Y)。
+     * @return Animator
      */
     public Animator createAnimator() {
         ValueAnimator valueAnimator = ValueAnimator.ofFloat(1, 0.001f).setDuration(BACK_ANIM_DURATION);
         valueAnimator.setInterpolator(new DecelerateInterpolator());
-        valueAnimator.addUpdateListener(valueAnimator1 -> {
-            updateComleteState((float) valueAnimator1.getAnimatedValue());
-            postInvalidate();
+        valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator valueAnimator1) {
+                WaterDropView.this.updateCompleteState((float) valueAnimator1.getAnimatedValue());
+                WaterDropView.this.postInvalidate();
+            }
         });
         return valueAnimator;
     }
 
     /**
      * 完成的百分比
+     * @param offset 偏移量
+     * @param maxHeight 最大高度
      */
-    public void updateComleteState(int offset, int maxHeight) {
+    public void updateCompleteState(int offset, int maxHeight) {
 //        float space = mMaxCircleRadius * 2 + getPaddingTop() + getPaddingBottom();
-//        updateComleteState(Math.max(0, 1f * (offset - space) / (maxHeight - space)));
+//        updateCompleteState(Math.max(0, 1f * (offset - space) / (maxHeight - space)));
     }
 
     /**
      * 完成的百分比
+     * @param percent 百分比
      */
-    public void updateComleteState(float percent) {
+    public void updateCompleteState(float percent) {
         float top_r = (float) (mMaxCircleRadius - 0.25 * percent * mMaxCircleRadius);
-        float bottom_r = (mMinCircleRaidus - mMaxCircleRadius) * percent + mMaxCircleRadius;
-        float bottomCricleOffset = 4 * percent * mMaxCircleRadius;
+        float bottom_r = (mMinCircleRadius - mMaxCircleRadius) * percent + mMaxCircleRadius;
+        float bottomCircleOffset = 4 * percent * mMaxCircleRadius;
 
         topCircle.radius = (top_r);
         bottomCircle.radius = (bottom_r);
-        bottomCircle.y = (topCircle.y + bottomCricleOffset);
+        bottomCircle.y = (topCircle.y + bottomCircleOffset);
     }
 
     /**
      * 完成的百分比
+     * @param height 高度
      */
-    public void updateComleteState(int height) {
+    public void updateCompleteState(int height) {
         final int paddingTop = getPaddingTop();
         final int paddingBottom = getPaddingBottom();
         float space = mMaxCircleRadius * 2 + paddingTop + paddingBottom;
@@ -212,7 +209,7 @@ public class WaterDropView extends View {
             bottomCircle.radius = mMaxCircleRadius;
             bottomCircle.y = topCircle.y;
         } else {
-            float limit = mMaxCircleRadius - mMinCircleRaidus;
+            float limit = mMaxCircleRadius - mMinCircleRadius;
             float x = Math.max(0, height - space);
             float y = (float) (limit * (1 - Math.pow(100, -x / DensityUtil.dp2px(200))));
             topCircle.radius = mMaxCircleRadius - y / 4;
@@ -230,7 +227,7 @@ public class WaterDropView extends View {
         return bottomCircle;
     }
 
-    public void setIndicatorColor(int color) {
+    public void setIndicatorColor(@ColorInt int color) {
         mPaint.setColor(color);
     }
 
